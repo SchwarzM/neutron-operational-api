@@ -34,8 +34,8 @@ type nsScope struct{}
 func (nsScope) Name() apimeta.RESTScopeName { return apimeta.RESTScopeNameNamespace }
 
 var (
-	nsGVR  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
-	cmGVR  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}
+	nsGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
+	cmGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}
 
 	baseMapper = &fakeMapper{m: map[schema.GroupKind]apimeta.RESTMapping{
 		{Group: "", Kind: "Namespace"}: {
@@ -51,14 +51,17 @@ var (
 	}}
 )
 
-func newFakeDC() *dynfake.FakeDynamicClient {
+func newFakeDC(t *testing.T) *dynfake.FakeDynamicClient {
+	t.Helper()
 	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add corev1 to scheme: %v", err)
+	}
 	return dynfake.NewSimpleDynamicClient(scheme)
 }
 
 func TestApplyManifests_CreatesClusterScopedResource(t *testing.T) {
-	dc := newFakeDC()
+	dc := newFakeDC(t)
 	manifest := []byte(`apiVersion: v1
 kind: Namespace
 metadata:
@@ -73,7 +76,7 @@ metadata:
 }
 
 func TestApplyManifests_CreatesNamespacedResource(t *testing.T) {
-	dc := newFakeDC()
+	dc := newFakeDC(t)
 	manifest := []byte(`apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -89,7 +92,7 @@ metadata:
 }
 
 func TestApplyManifests_MultiDoc(t *testing.T) {
-	dc := newFakeDC()
+	dc := newFakeDC(t)
 	manifest := []byte(`apiVersion: v1
 kind: Namespace
 metadata:
@@ -111,7 +114,7 @@ metadata:
 }
 
 func TestApplyManifests_IdempotentOnAlreadyExists(t *testing.T) {
-	dc := newFakeDC()
+	dc := newFakeDC(t)
 	manifest := []byte(`apiVersion: v1
 kind: Namespace
 metadata:

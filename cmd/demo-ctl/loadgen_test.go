@@ -22,7 +22,7 @@ func TestLoadGenSendsRequests(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck // test handler, ignore write errors
 			"pod":            "test-pod",
 			"requestsServed": 1,
 		})

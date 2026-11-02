@@ -65,12 +65,14 @@ func (s *server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	s.requestsServed.Add(1)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"pod":            s.podName,
 		"ready":          s.ready.Load(),
 		"delayMs":        s.delayMs.Load(),
 		"requestsServed": s.requestsServed.Load(),
-	})
+	}); err != nil {
+		log.Printf("encode response: %v", err)
+	}
 }
 
 func (s *server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
@@ -132,7 +134,9 @@ func main() {
 	go func() {
 		<-sigCh
 		s.shutdown()
-		srv.Shutdown(context.Background())
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
 		close(shutdownDone)
 	}()
 

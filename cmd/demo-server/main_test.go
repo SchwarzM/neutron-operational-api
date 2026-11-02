@@ -55,7 +55,7 @@ func TestLivezAlwaysOK(t *testing.T) {
 	defer srv.Close()
 
 	// Toggle readiness off — livez must still return 200
-	http.Post(srv.URL+"/admin/ready", "application/json", bytes.NewBufferString(`{"ready":false}`))
+	http.Post(srv.URL+"/admin/ready", "application/json", bytes.NewBufferString(`{"ready":false}`)) //nolint:errcheck // test setup call
 
 	resp, err := http.Get(srv.URL + "/livez")
 	if err != nil {
@@ -89,10 +89,10 @@ func TestDelaySlowsResponse(t *testing.T) {
 	srv := newTestServer(t)
 	defer srv.Close()
 
-	http.Post(srv.URL+"/admin/delay", "application/json", bytes.NewBufferString(`{"ms":100}`))
+	http.Post(srv.URL+"/admin/delay", "application/json", bytes.NewBufferString(`{"ms":100}`)) //nolint:errcheck // test setup call
 
 	start := time.Now()
-	http.Get(srv.URL + "/")
+	http.Get(srv.URL + "/") //nolint:errcheck // test call to verify timing, response not needed
 	elapsed := time.Since(start)
 
 	if elapsed < 90*time.Millisecond {

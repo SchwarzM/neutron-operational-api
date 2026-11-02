@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
@@ -10,6 +11,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
@@ -17,7 +24,7 @@ func main() {
 
 	cluster := NewCluster(hub)
 	if err := cluster.Bootstrap(ctx); err != nil {
-		log.Fatalf("bootstrap cluster: %v", err)
+		return fmt.Errorf("bootstrap cluster: %w", err)
 	}
 
 	k8s := NewK8s(hub, cluster.Clientset(), cluster.RESTConfig())
@@ -41,17 +48,22 @@ func main() {
 		<-ctx.Done()
 		log.Println("shutting down...")
 		lg.Stop()
-		cluster.Destroy(context.Background())
-		httpSrv.Shutdown(context.Background())
+		if err := cluster.Destroy(context.Background()); err != nil {
+			log.Printf("destroy cluster: %v", err)
+		}
+		if err := httpSrv.Shutdown(context.Background()); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
 	}()
 
 	log.Println("demo-ctl: listening on http://localhost:9090")
 	if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }
 
 func openBrowser(url string) {
 	// macOS
-	exec.Command("open", url).Start()
+	exec.Command("open", url).Start() //nolint:errcheck // best-effort browser open, ignore failure
 }

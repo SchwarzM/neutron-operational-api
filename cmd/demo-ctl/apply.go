@@ -3,15 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -30,7 +31,7 @@ func applyManifests(ctx context.Context, dc dynamic.Interface, mapper restMapper
 	decoder := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(manifest), 4096)
 	for {
 		var raw runtime.RawExtension
-		if err := decoder.Decode(&raw); err == io.EOF {
+		if err := decoder.Decode(&raw); errors.Is(err, io.EOF) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("decode manifest: %w", err)

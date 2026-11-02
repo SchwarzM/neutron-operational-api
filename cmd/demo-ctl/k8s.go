@@ -48,13 +48,19 @@ func NewK8s(pub Publisher, cs kubernetes.Interface, rcfg *rest.Config) *K8s {
 
 // SetReady calls POST /admin/ready on the pod via the API server pod proxy.
 func (k *K8s) SetReady(ctx context.Context, name string, ready bool) error {
-	body, _ := json.Marshal(map[string]bool{"ready": ready})
+	body, err := json.Marshal(map[string]bool{"ready": ready})
+	if err != nil {
+		return fmt.Errorf("marshal ready: %w", err)
+	}
 	return k.podProxy(ctx, name, "POST", "admin/ready", body)
 }
 
 // SetDelay calls POST /admin/delay on the pod via the API server pod proxy.
 func (k *K8s) SetDelay(ctx context.Context, name string, ms int64) error {
-	body, _ := json.Marshal(map[string]int64{"ms": ms})
+	body, err := json.Marshal(map[string]int64{"ms": ms})
+	if err != nil {
+		return fmt.Errorf("marshal delay: %w", err)
+	}
 	return k.podProxy(ctx, name, "POST", "admin/delay", body)
 }
 
@@ -132,7 +138,7 @@ func (k *K8s) WatchPods(ctx context.Context) {
 				Ready:          ready,
 				Terminating:    terminating,
 				GraceRemaining: graceRemaining,
-				GracePeriod:    int32(podGracePeriod(pod)),
+				GracePeriod:    int32(podGracePeriod(pod)), //nolint:gosec // G115: grace period in seconds, always within int32 range
 				PreStopSleep:   podPreStopSleep(pod),
 				InFlight:       inFlight,
 			})
@@ -144,14 +150,14 @@ func (k *K8s) WatchPods(ctx context.Context) {
 							Type:    EventSignal,
 							Kind:    SignalProbeOK,
 							PodName: pod.Name,
-							Message: fmt.Sprintf("%s: readiness probe passing", pod.Name),
+							Message: pod.Name + ": readiness probe passing",
 						})
 					} else {
 						k.pub.Publish(SignalEvent{
 							Type:    EventSignal,
 							Kind:    SignalProbeFail,
 							PodName: pod.Name,
-							Message: fmt.Sprintf("%s: readiness probe failed", pod.Name),
+							Message: pod.Name + ": readiness probe failed",
 						})
 					}
 				}
@@ -191,7 +197,7 @@ func (k *K8s) WatchPods(ctx context.Context) {
 										Ready:          isPodReady(p),
 										Terminating:    true,
 										GraceRemaining: remaining,
-										GracePeriod:    int32(podGracePeriod(p)),
+										GracePeriod:    int32(podGracePeriod(p)), //nolint:gosec // G115: grace period in seconds, always within int32 range
 										PreStopSleep:   podPreStopSleep(p),
 										InFlight:       k.TotalInFlight(),
 									})
@@ -209,7 +215,7 @@ func (k *K8s) WatchPods(ctx context.Context) {
 					Type:    EventSignal,
 					Kind:    SignalDrained,
 					PodName: pod.Name,
-					Message: fmt.Sprintf("%s: pod exited", pod.Name),
+					Message: pod.Name + ": pod exited",
 				})
 				k.pub.Publish(PodEvent{
 					Type:    EventPod,
@@ -272,7 +278,7 @@ func (k *K8s) WatchEndpoints(ctx context.Context) {
 						Type:    EventSignal,
 						Kind:    SignalEndpointAdd,
 						PodName: name,
-						Message: fmt.Sprintf("%s: added to endpoints", name),
+						Message: name + ": added to endpoints",
 					})
 				}
 			}
@@ -282,7 +288,7 @@ func (k *K8s) WatchEndpoints(ctx context.Context) {
 						Type:    EventSignal,
 						Kind:    SignalEndpointRemove,
 						PodName: name,
-						Message: fmt.Sprintf("%s: removed from endpoints", name),
+						Message: name + ": removed from endpoints",
 					})
 				}
 			}
@@ -377,10 +383,13 @@ func presetForStrategy(s appsv1.DeploymentStrategy) string {
 }
 
 func (k *K8s) ScaleDeployment(ctx context.Context, replicas int32) error {
-	patch, _ := json.Marshal(map[string]any{
+	patch, err := json.Marshal(map[string]any{
 		"spec": map[string]any{"replicas": replicas},
 	})
-	_, err := k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	if err != nil {
+		return fmt.Errorf("marshal scale patch: %w", err)
+	}
+	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -397,17 +406,20 @@ func (k *K8s) SetStrategy(ctx context.Context, preset string) error {
 		s := strategyForPreset(preset)
 		stratPatch = s
 	}
-	patch, _ := json.Marshal(map[string]any{
+	patch, err := json.Marshal(map[string]any{
 		"spec": map[string]any{"strategy": stratPatch},
 	})
-	_, err := k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	if err != nil {
+		return fmt.Errorf("marshal strategy patch: %w", err)
+	}
+	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
 }
 
 func (k *K8s) SetGracePeriod(ctx context.Context, seconds int32) error {
-	patch, _ := json.Marshal(map[string]any{
+	patch, err := json.Marshal(map[string]any{
 		"spec": map[string]any{
 			"template": map[string]any{
 				"spec": map[string]any{
@@ -416,14 +428,17 @@ func (k *K8s) SetGracePeriod(ctx context.Context, seconds int32) error {
 			},
 		},
 	})
-	_, err := k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	if err != nil {
+		return fmt.Errorf("marshal grace period patch: %w", err)
+	}
+	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
 }
 
 func (k *K8s) TriggerRollout(ctx context.Context) error {
-	patch, _ := json.Marshal(map[string]any{
+	patch, err := json.Marshal(map[string]any{
 		"spec": map[string]any{
 			"template": map[string]any{
 				"metadata": map[string]any{
@@ -434,7 +449,10 @@ func (k *K8s) TriggerRollout(ctx context.Context) error {
 			},
 		},
 	})
-	_, err := k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	if err != nil {
+		return fmt.Errorf("marshal rollout patch: %w", err)
+	}
+	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -454,7 +472,7 @@ func (k *K8s) SetPreStopSleep(ctx context.Context, seconds int32) error {
 			},
 		}
 	}
-	patch, _ := json.Marshal(map[string]any{
+	patch, err := json.Marshal(map[string]any{
 		"spec": map[string]any{
 			"template": map[string]any{
 				"spec": map[string]any{
@@ -466,7 +484,10 @@ func (k *K8s) SetPreStopSleep(ctx context.Context, seconds int32) error {
 			},
 		},
 	})
-	_, err := k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	if err != nil {
+		return fmt.Errorf("marshal prestop patch: %w", err)
+	}
+	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
 		ctx, "demo", types.StrategicMergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -517,7 +538,7 @@ func (k *K8s) WatchDeployment(ctx context.Context) {
 			}
 			grace := int32(terminationGracePeriod)
 			if dep.Spec.Template.Spec.TerminationGracePeriodSeconds != nil {
-				grace = int32(*dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
+				grace = int32(*dep.Spec.Template.Spec.TerminationGracePeriodSeconds) //nolint:gosec // G115: grace period in seconds, always within int32 range
 			}
 			k.pub.Publish(DeploymentEvent{
 				Type:              EventDeployment,

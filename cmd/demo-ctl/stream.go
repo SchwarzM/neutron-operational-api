@@ -62,8 +62,8 @@ func (h *Hub) Publish(v any) {
 // subscribe registers a new client channel and returns an unsubscribe func.
 // All sticky state is sent immediately so reconnecting browsers see current
 // state without waiting for the next event.
-func (h *Hub) subscribe() (chan []byte, func()) {
-	ch := make(chan []byte, 64)
+func (h *Hub) subscribe() (ch chan []byte, unsub func()) {
+	ch = make(chan []byte, 64)
 	h.mu.Lock()
 	h.clients[ch] = struct{}{}
 	if h.lastCluster != nil {
@@ -109,9 +109,9 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			_, _ = w.Write([]byte("data: "))
-			_, _ = w.Write(data)
-			_, _ = w.Write([]byte("\n\n"))
+			_, _ = w.Write([]byte("data: ")) //nolint:errcheck // SSE: client disconnect handled via context
+			_, _ = w.Write(data)             //nolint:errcheck
+			_, _ = w.Write([]byte("\n\n"))   //nolint:errcheck
 			flusher.Flush()
 		case <-r.Context().Done():
 			return

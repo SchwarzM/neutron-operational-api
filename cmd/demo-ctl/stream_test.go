@@ -87,7 +87,7 @@ func TestHubPodDeletedRemovedFromSticky(t *testing.T) {
 	select {
 	case data := <-ch:
 		var m map[string]any
-		json.Unmarshal(data, &m)
+		json.Unmarshal(data, &m) //nolint:errcheck
 		t.Fatalf("unexpected replay of deleted pod: %v", m)
 	case <-time.After(50 * time.Millisecond):
 		// correct — nothing replayed

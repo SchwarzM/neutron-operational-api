@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
@@ -27,17 +25,14 @@ func TestWatchPodsPublishesDeletedEvent(t *testing.T) {
 	pub := &capPublisher{}
 	k := NewK8s(pub, cs, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go k.WatchPods(ctx)
 	time.Sleep(50 * time.Millisecond) // let watch loop start
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "demo-abc123",
-			Namespace: demoNamespace,
-		},
+		Name:      "demo-abc123",
+		Namespace: demoNamespace,
 	}
 	fakeWatcher.Delete(pod)
 	time.Sleep(50 * time.Millisecond) // let event propagate
@@ -49,8 +44,6 @@ func TestWatchPodsPublishesDeletedEvent(t *testing.T) {
 	}
 	t.Fatal("expected PodEvent{Deleted:true, Name:\"demo-abc123\"} but did not find it in published events")
 }
-
-func int32ptr(n int32) *int32 { return &n }
 
 func TestStrategyForPreset(t *testing.T) {
 	cases := []struct {
@@ -92,16 +85,15 @@ func TestWatchDeploymentPublishesEvent(t *testing.T) {
 	pub := &capPublisher{}
 	k := NewK8s(pub, cs, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go k.WatchDeployment(ctx)
 	time.Sleep(50 * time.Millisecond)
 
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: demoNamespace},
+		Name: "demo", Namespace: demoNamespace,
 		Spec: appsv1.DeploymentSpec{
-			Replicas: int32ptr(3),
+			Replicas: new(int32(3)),
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{

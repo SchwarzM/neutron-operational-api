@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"strings"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	_ "embed"
@@ -55,11 +55,16 @@ func (c *Cluster) Bootstrap(ctx context.Context) error {
 		return fmt.Errorf("write kind config: %w", err)
 	}
 	defer os.Remove(cfgFile.Name())
-	cfgFile.Write(kindConfigYAML)
+	if _, err = cfgFile.Write(kindConfigYAML); err != nil {
+		return fmt.Errorf("write kind config content: %w", err)
+	}
 	cfgFile.Close()
 
 	// Always start clean: delete any existing cluster first.
-	existOut, _ := exec.CommandContext(ctx, "kind", "get", "clusters").Output()
+	existOut, err := exec.CommandContext(ctx, "kind", "get", "clusters").Output()
+	if err != nil {
+		existOut = nil // kind not available or failed; proceed, subsequent calls will report errors
+	}
 	if bytes.Contains(existOut, []byte(clusterName)) {
 		if err := kindRun(ctx, "delete", "cluster", "--name", clusterName); err != nil {
 			return fmt.Errorf("kind delete cluster: %w", err)
@@ -142,7 +147,10 @@ func (c *Cluster) waitForIngressController(ctx context.Context) error {
 			pods, err := c.cs.CoreV1().Pods("ingress-nginx").List(ctx, metav1.ListOptions{
 				LabelSelector: "app.kubernetes.io/component=controller",
 			})
-			if err != nil || len(pods.Items) == 0 {
+			if err != nil {
+				return false, err
+			}
+			if len(pods.Items) == 0 {
 				return false, nil
 			}
 			for _, p := range pods.Items {
@@ -157,7 +165,7 @@ func (c *Cluster) waitForIngressController(ctx context.Context) error {
 }
 
 func (c *Cluster) createNamespace(ctx context.Context) error {
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: demoNamespace}}
+	ns := &corev1.Namespace{Name: demoNamespace}
 	_, err := c.cs.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if k8serrors.IsAlreadyExists(err) {
 		return nil
@@ -167,7 +175,7 @@ func (c *Cluster) createNamespace(ctx context.Context) error {
 
 func (c *Cluster) createService(ctx context.Context) error {
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "demo-svc", Namespace: demoNamespace},
+		Name: "demo-svc", Namespace: demoNamespace,
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": "demo"},
 			Ports: []corev1.ServicePort{{
@@ -187,26 +195,22 @@ func (c *Cluster) createIngress(ctx context.Context) error {
 	pathType := networkingv1.PathTypePrefix
 	className := "nginx"
 	ing := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "demo",
-			Namespace: demoNamespace,
-		},
+		Name:      "demo",
+		Namespace: demoNamespace,
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
 			Rules: []networkingv1.IngressRule{{
-				IngressRuleValue: networkingv1.IngressRuleValue{
-					HTTP: &networkingv1.HTTPIngressRuleValue{
-						Paths: []networkingv1.HTTPIngressPath{{
-							Path:     "/",
-							PathType: &pathType,
-							Backend: networkingv1.IngressBackend{
-								Service: &networkingv1.IngressServiceBackend{
-									Name: "demo-svc",
-									Port: networkingv1.ServiceBackendPort{Number: 80},
-								},
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{{
+						Path:     "/",
+						PathType: &pathType,
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: "demo-svc",
+								Port: networkingv1.ServiceBackendPort{Number: 80},
 							},
-						}},
-					},
+						},
+					}},
 				},
 			}},
 		},
@@ -224,7 +228,7 @@ func (c *Cluster) createDeployment(ctx context.Context) error {
 	maxU := intstr.FromInt32(0)
 	maxS := intstr.FromInt32(1)
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: demoNamespace},
+		Name: "demo", Namespace: demoNamespace,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
@@ -257,22 +261,18 @@ func (c *Cluster) createDeployment(ctx context.Context) error {
 						}},
 						Ports: []corev1.ContainerPort{{ContainerPort: 8080}},
 						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{
-									Path: "/readyz",
-									Port: intstr.FromInt32(8080),
-								},
+							HTTPGet: &corev1.HTTPGetAction{
+								Path: "/readyz",
+								Port: intstr.FromInt32(8080),
 							},
 							PeriodSeconds:    2,
 							FailureThreshold: 1,
 							SuccessThreshold: 1,
 						},
 						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{
-									Path: "/livez",
-									Port: intstr.FromInt32(8080),
-								},
+							HTTPGet: &corev1.HTTPGetAction{
+								Path: "/livez",
+								Port: intstr.FromInt32(8080),
 							},
 							PeriodSeconds:    10,
 							FailureThreshold: 3,
@@ -299,4 +299,3 @@ func kindRun(ctx context.Context, args ...string) error {
 func kindOutput(ctx context.Context, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, "kind", args...).Output()
 }
-

@@ -7,7 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sort"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -109,7 +109,7 @@ func (lg *LoadGen) doRequest(ctx context.Context) {
 		url = fmt.Sprintf("%s?wait=%d", url, d)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return
 	}
@@ -128,10 +128,13 @@ func (lg *LoadGen) doRequest(ctx context.Context) {
 			var body struct {
 				Pod string `json:"pod"`
 			}
-			data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			data, rerr := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
-			json.Unmarshal(data, &body)
-			podName = body.Pod
+			if rerr == nil {
+				if jerr := json.Unmarshal(data, &body); jerr == nil {
+					podName = body.Pod
+				}
+			}
 		}
 	}
 	lg.k8s.InFlightDec("")
@@ -204,7 +207,7 @@ func (lg *LoadGen) publishStats() {
 		}
 		durations = append(durations, s.durationMs)
 	}
-	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+	slices.Sort(durations)
 
 	p50 := durations[len(durations)*50/100]
 	p95 := durations[len(durations)*95/100]
