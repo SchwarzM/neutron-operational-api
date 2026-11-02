@@ -33,10 +33,11 @@ endif
 
 default: build-all
 
-CLUSTER_NAME = k8s-readiness-demo
-IMAGE        = demo-server:local
+CLUSTER_NAME  = k8s-readiness-demo
+IMAGE         = demo-server:local
+GHCR_IMAGE    = ghcr.io/schwarzm/neutron-operational-api:edge
 
-.PHONY: check-prereqs demo build-web build-image
+.PHONY: check-prereqs check-prereqs-quick demo demo-quick build-web build-image
 
 check-prereqs:
 	@for tool in go docker kind; do \
@@ -51,6 +52,23 @@ check-prereqs:
 	  }; \
 	done
 
+check-prereqs-quick:
+	@for tool in docker kind; do \
+	  command -v $$tool >/dev/null 2>&1 || { \
+	    echo "missing prerequisite: $$tool"; \
+	    case $$tool in \
+	      docker) echo "  install: https://docs.docker.com/get-docker/";; \
+	      kind)   echo "  install: https://kind.sigs.k8s.io/docs/user/quick-start/#installation";; \
+	    esac; \
+	    exit 1; \
+	  }; \
+	done
+	@test -x ./demo-ctl || { \
+	  echo "demo-ctl binary not found. Download it from:"; \
+	  echo "  https://github.com/SchwarzM/neutron-operational-api/releases/latest"; \
+	  exit 1; \
+	}
+
 build-web:
 	docker run --rm \
 	  -v "$(CURDIR)/web:/app" \
@@ -62,8 +80,15 @@ build-image:
 	docker build -t $(IMAGE) .
 	-kind load docker-image $(IMAGE) --name $(CLUSTER_NAME) 2>/dev/null || true
 
+# Full build from source (requires Go, Docker, kind)
 demo: check-prereqs build-web build-image
 	go run ./cmd/demo-ctl/
+
+# Quick start using pre-built binaries (requires Docker, kind only)
+demo-quick: check-prereqs-quick
+	docker pull $(GHCR_IMAGE)
+	docker tag $(GHCR_IMAGE) $(IMAGE)
+	./demo-ctl
 
 install-goimports: FORCE
 	@if ! hash goimports 2>/dev/null; then printf "\e[1;36m>> Installing goimports (this may take a while)...\e[0m\n"; go install golang.org/x/tools/cmd/goimports@latest; fi
