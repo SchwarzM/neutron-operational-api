@@ -6,7 +6,7 @@ An interactive demo showing how Kubernetes readiness probes, rolling deployments
 
 Prerequisites: [Docker](https://docs.docker.com/get-docker/) and [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
 
-1. Download `demo-ctl` for your platform from the [latest release](https://github.com/SchwarzM/neutron-operational-api/releases/latest)
+1. Download `demo-ctl` for your platform from the [edge release](https://github.com/SchwarzM/neutron-operational-api/releases/tag/edge)
 2. Run the demo:
 
 ```sh

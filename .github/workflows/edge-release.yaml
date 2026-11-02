@@ -1,0 +1,54 @@
+name: Edge Binary Release
+"on":
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  release-edge:
+    name: Build and publish edge binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          check-latest: true
+          go-version: 1.27.3
+      - name: Build demo-ctl for all platforms
+        run: |
+          mkdir -p dist
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os="${platform%/*}"
+            arch="${platform#*/}"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
+              go build -ldflags="-s -w" -o "dist/demo-ctl" ./cmd/demo-ctl
+            tar czf "dist/demo-ctl-${os}-${arch}.tar.gz" -C dist demo-ctl
+            rm dist/demo-ctl
+          done
+      - name: Publish to edge release
+        run: |
+          if gh release view edge > /dev/null 2>&1; then
+            gh release upload edge dist/*.tar.gz --clobber
+            gh release edit edge \
+              --prerelease \
+              --title "Edge (latest main)" \
+              --notes "Pre-release binaries built from the latest commit on main. Matches the \`ghcr.io/schwarzm/neutron-operational-api:edge\` image.
+
+          Download the binary for your platform, extract it, and follow the [quick start](https://github.com/SchwarzM/neutron-operational-api#quick-start-no-go-required) instructions."
+          else
+            gh release create edge \
+              --prerelease \
+              --title "Edge (latest main)" \
+              --notes "Pre-release binaries built from the latest commit on main. Matches the \`ghcr.io/schwarzm/neutron-operational-api:edge\` image.
+
+          Download the binary for your platform, extract it, and follow the [quick start](https://github.com/SchwarzM/neutron-operational-api#quick-start-no-go-required) instructions." \
+              dist/*.tar.gz
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
