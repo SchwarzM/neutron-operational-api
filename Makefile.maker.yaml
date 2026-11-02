@@ -72,19 +72,14 @@ verbatim: |
     done
 
   check-prereqs-quick:
-    @for tool in docker kind; do \
-      command -v $$tool >/dev/null 2>&1 || { \
-        echo "missing prerequisite: $$tool"; \
-        case $$tool in \
-          docker) echo "  install: https://docs.docker.com/get-docker/";; \
-          kind)   echo "  install: https://kind.sigs.k8s.io/docs/user/quick-start/#installation";; \
-        esac; \
-        exit 1; \
-      }; \
-    done
+    @command -v kind >/dev/null 2>&1 || { \
+      echo "missing prerequisite: kind"; \
+      echo "  install: https://kind.sigs.k8s.io/docs/user/quick-start/#installation"; \
+      exit 1; \
+    }
     @test -x ./demo-ctl || { \
       echo "demo-ctl binary not found. Download it from:"; \
-      echo "  https://github.com/SchwarzM/neutron-operational-api/releases/latest"; \
+      echo "  https://github.com/SchwarzM/neutron-operational-api/releases/tag/edge"; \
       exit 1; \
     }
 
@@ -103,8 +98,6 @@ verbatim: |
   demo: check-prereqs build-web build-image
     go run ./cmd/demo-ctl/
 
-  # Quick start using pre-built binaries (requires Docker, kind only)
+  # Quick start using pre-built binaries — demo-ctl pulls the image automatically (requires kind only)
   demo-quick: check-prereqs-quick
-    docker pull $(GHCR_IMAGE)
-    docker tag $(GHCR_IMAGE) $(IMAGE)
     ./demo-ctl

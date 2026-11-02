@@ -4,24 +4,16 @@ An interactive demo showing how Kubernetes readiness probes, rolling deployments
 
 ## Quick start (no Go required)
 
-Prerequisites: [Docker](https://docs.docker.com/get-docker/) and [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+Prerequisites: [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
 
-1. Download `demo-ctl` for your platform from the [edge release](https://github.com/SchwarzM/neutron-operational-api/releases/tag/edge)
+1. Download `demo-ctl` for your platform from the [edge release](https://github.com/SchwarzM/neutron-operational-api/releases/tag/edge) and extract it
 2. Run the demo:
 
 ```sh
-make demo-quick
-```
-
-or without make:
-
-```sh
-docker pull ghcr.io/schwarzm/neutron-operational-api:edge
-docker tag ghcr.io/schwarzm/neutron-operational-api:edge demo-server:local
 ./demo-ctl
 ```
 
-The demo opens at http://localhost:9090. Press Ctrl-C to stop — the kind cluster is deleted on exit.
+`demo-ctl` pulls the server image automatically on first run. The demo opens at http://localhost:9090. Press Ctrl-C to stop — the kind cluster is deleted on exit.
 
 ## Build from source
 

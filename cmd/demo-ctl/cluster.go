@@ -32,6 +32,7 @@ var nginxIngressYAML []byte
 const (
 	clusterName   = "k8s-readiness-demo"
 	demoNamespace = "demo"
+	ghcrImage     = "ghcr.io/schwarzm/neutron-operational-api:edge"
 )
 
 // Cluster owns the kind cluster lifecycle and bootstraps all k8s objects.
@@ -75,6 +76,9 @@ func (c *Cluster) Bootstrap(ctx context.Context) error {
 	}
 
 	// Load the demo-server image into the cluster nodes so PullNever pods start.
+	if err := ensureImage(ctx, demoImageName, ghcrImage); err != nil {
+		return fmt.Errorf("ensure demo image: %w", err)
+	}
 	if out, err := exec.CommandContext(ctx, "kind", "load", "docker-image", demoImageName, "--name", clusterName).CombinedOutput(); err != nil {
 		return fmt.Errorf("kind load: %w\n%s", err, out)
 	}
@@ -298,4 +302,31 @@ func kindRun(ctx context.Context, args ...string) error {
 
 func kindOutput(ctx context.Context, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, "kind", args...).Output()
+}
+
+// ensureImage checks whether localTag exists in the local container image store.
+// If not, it pulls remoteImage from the registry and tags it as localTag.
+// This lets demo-ctl run without a prior manual pull when using pre-built images.
+// Works with both Docker and Podman.
+func ensureImage(ctx context.Context, localTag, remoteImage string) error {
+	cli := containerCLI()
+	if err := exec.CommandContext(ctx, cli, "image", "inspect", localTag).Run(); err == nil {
+		return nil // image already present
+	}
+	fmt.Printf("image %s not found locally — pulling %s\n", localTag, remoteImage)
+	if out, err := exec.CommandContext(ctx, cli, "pull", remoteImage).CombinedOutput(); err != nil {
+		return fmt.Errorf("%s pull %s: %w\n%s", cli, remoteImage, err, out)
+	}
+	if out, err := exec.CommandContext(ctx, cli, "tag", remoteImage, localTag).CombinedOutput(); err != nil {
+		return fmt.Errorf("%s tag: %w\n%s", cli, err, out)
+	}
+	return nil
+}
+
+// containerCLI returns "docker" if available, otherwise "podman".
+func containerCLI() string {
+	if _, err := exec.LookPath("docker"); err == nil {
+		return "docker"
+	}
+	return "podman"
 }
