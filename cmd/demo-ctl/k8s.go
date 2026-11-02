@@ -22,7 +22,6 @@ import (
 
 const (
 	terminationGracePeriod = 30
-	demoImageName          = "demo-server:local"
 )
 
 // K8s manages demo pods and watches their state.
