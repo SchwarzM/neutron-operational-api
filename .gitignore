@@ -1,0 +1,8 @@
+.worktrees/
+bin/
+/demo-ctl
+/demo-server
+cmd/demo-ctl/assets/
+web/node_modules/
+web/dist/
+*.local
