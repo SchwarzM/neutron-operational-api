@@ -114,7 +114,9 @@ CONTROL_PLANE_URL=http://demo-ctl-svc.demo-system.svc.cluster.local
 
 The hardcoded `demoNamespace = "demo"` constant is replaced with a `namespace` field on the `K8s` struct (passed at construction). All watch and patch calls use `k.namespace` instead of the constant. Otherwise unchanged.
 
-The `K8s` struct loses `InFlightInc`/`InFlightDec`/`TotalInFlight` — in-flight tracking moves to the loadgen pod. The `K8s` struct also gains a `statsLoop` that publishes `StatsEvent` every second by reading a ring buffer populated by incoming `RequestEvent` callbacks.
+The `K8s` struct loses `InFlightInc`/`InFlightDec`/`TotalInFlight` — in-flight tracking moves to the loadgen pod. The `K8s` struct gains a `statsLoop` that publishes `StatsEvent` every second by reading a ring buffer populated by incoming `RequestEvent` callbacks.
+
+Note: in the current design, in-flight is already tracked globally (not per-pod) — `InFlightInc("")` always uses the empty string key. The loadgen pod tracks its own in-flight counter atomically and includes it in each `RequestEvent`. Per-pod routing attribution comes from the JSON response body (`{"pod": "..."}` returned by demo-server on every request), which the loadgen pod reads and forwards unchanged in `RequestEvent.podName`.
 
 **`server.go`**
 
@@ -190,7 +192,7 @@ The `demo-ctl` binary and the new `loadgen` binary are both included in the Dock
 ## Spec self-review
 
 - No TBDs or incomplete sections.
-- In-flight tracking: was in K8s struct (for pod-level attribution), moves to loadgen. Pod-level in-flight display will only show total (no per-pod breakdown) unless the loadgen parses the `X-Pod` response header — acceptable for v1.
+- Per-pod routing attribution: works unchanged — demo-server returns `{"pod": "..."}` in every response body; the loadgen pod reads and forwards it in `RequestEvent.podName`. In-flight tracking was already global (not per-pod) in the original design; the loadgen pod tracks its own atomic counter and includes it in each event.
 - Stats ring buffer: the control plane computes StatsEvent from the stream of RequestEvents it receives via `/internal/event`, same algorithm as existing `statsLoop`. This is equivalent behavior.
 - Session ID collision: 8 hex chars = 4 billion combinations; for 20 concurrent sessions the probability is negligible.
 - The `internal/event` endpoint is not exposed through the cluster ingress (it has no path rule) — it is only reachable at the ClusterIP address, which is in-cluster only.
