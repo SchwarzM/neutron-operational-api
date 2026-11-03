@@ -23,7 +23,7 @@ func TestWatchPodsPublishesDeletedEvent(t *testing.T) {
 	})
 
 	pub := &capPublisher{}
-	k := NewK8s(pub, cs, nil)
+	k := NewK8s(pub, cs, nil, "demo-test", func() int { return 0 })
 
 	ctx := t.Context()
 
@@ -32,7 +32,7 @@ func TestWatchPodsPublishesDeletedEvent(t *testing.T) {
 
 	pod := &corev1.Pod{
 		Name:      "demo-abc123",
-		Namespace: demoNamespace,
+		Namespace: "demo-test",
 	}
 	fakeWatcher.Delete(pod)
 	time.Sleep(50 * time.Millisecond) // let event propagate
@@ -83,7 +83,7 @@ func TestWatchDeploymentPublishesEvent(t *testing.T) {
 		return true, fakeWatcher, nil
 	})
 	pub := &capPublisher{}
-	k := NewK8s(pub, cs, nil)
+	k := NewK8s(pub, cs, nil, "demo-test", func() int { return 0 })
 
 	ctx := t.Context()
 
@@ -91,7 +91,7 @@ func TestWatchDeploymentPublishesEvent(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	dep := &appsv1.Deployment{
-		Name: "demo", Namespace: demoNamespace,
+		Name: "demo", Namespace: "demo-test",
 		Spec: appsv1.DeploymentSpec{
 			Replicas: new(int32(3)),
 			Strategy: appsv1.DeploymentStrategy{

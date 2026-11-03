@@ -15,10 +15,6 @@ import (
 
 const (
 	ghcrImage = "ghcr.io/schwarzm/neutron-operational-api:edge"
-
-	// demoNamespace is kept temporarily so k8s.go still compiles before Task 3
-	// migrates it to a struct field. Remove when Task 3 is complete.
-	demoNamespace = "demo"
 )
 
 // Cluster is a temporary stub so server.go/main.go compile until Tasks 5-6 replace them.
@@ -30,6 +26,15 @@ func (c *Cluster) Destroy(_ context.Context) error   { return nil }
 func (c *Cluster) Clientset() kubernetes.Interface   { return nil }
 func (c *Cluster) RESTConfig() *rest.Config          { return nil }
 func (c *Cluster) IngressURL() string                { return "" }
+
+// LoadGen is a temporary stub so server.go/main.go compile until Tasks 5-6 replace them.
+type LoadGen struct{}
+
+func NewLoadGen(_ Publisher, _ *K8s, _ string) *LoadGen { return &LoadGen{} }
+func (lg *LoadGen) Start()                              {}
+func (lg *LoadGen) Stop()                               {}
+func (lg *LoadGen) SetRPS(_ int)                        {}
+func (lg *LoadGen) SetDurationMs(_ int64)               {}
 
 func sessionNamespace(id string) string { return "demo-" + id }
 

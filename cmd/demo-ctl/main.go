@@ -27,7 +27,7 @@ func run() error {
 		return fmt.Errorf("bootstrap cluster: %w", err)
 	}
 
-	k8s := NewK8s(hub, cluster.Clientset(), cluster.RESTConfig())
+	k8s := NewK8s(hub, cluster.Clientset(), cluster.RESTConfig(), "", func() int { return 0 })
 	go k8s.WatchPods(ctx)
 	go k8s.WatchEndpoints(ctx)
 	go k8s.WatchDeployment(ctx)

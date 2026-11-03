@@ -26,22 +26,24 @@ const (
 
 // K8s manages demo pods and watches their state.
 type K8s struct {
-	pub  Publisher
-	cs   kubernetes.Interface
-	rcfg *rest.Config
+	pub        Publisher
+	cs         kubernetes.Interface
+	rcfg       *rest.Config
+	namespace  string
+	inFlightFn func() int
 
 	mu       sync.Mutex
-	inFlight map[string]int
 	podSpecs map[string]*corev1.Pod
 }
 
-func NewK8s(pub Publisher, cs kubernetes.Interface, rcfg *rest.Config) *K8s {
+func NewK8s(pub Publisher, cs kubernetes.Interface, rcfg *rest.Config, namespace string, inFlightFn func() int) *K8s {
 	return &K8s{
-		pub:      pub,
-		cs:       cs,
-		rcfg:     rcfg,
-		inFlight: make(map[string]int),
-		podSpecs: make(map[string]*corev1.Pod),
+		pub:        pub,
+		cs:         cs,
+		rcfg:       rcfg,
+		namespace:  namespace,
+		inFlightFn: inFlightFn,
+		podSpecs:   make(map[string]*corev1.Pod),
 	}
 }
 
@@ -63,39 +65,6 @@ func (k *K8s) SetDelay(ctx context.Context, name string, ms int64) error {
 	return k.podProxy(ctx, name, "POST", "admin/delay", body)
 }
 
-// InFlightInc increments the in-flight counter for a pod (called by loadgen).
-func (k *K8s) InFlightInc(podName string) {
-	k.mu.Lock()
-	k.inFlight[podName]++
-	k.mu.Unlock()
-}
-
-// InFlightDec decrements the in-flight counter for a pod (called by loadgen).
-func (k *K8s) InFlightDec(podName string) {
-	k.mu.Lock()
-	if k.inFlight[podName] > 0 {
-		k.inFlight[podName]--
-	}
-	k.mu.Unlock()
-}
-
-func (k *K8s) getInFlight(podName string) int {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return k.inFlight[podName]
-}
-
-// TotalInFlight returns the sum of all in-flight counters across all pods.
-func (k *K8s) TotalInFlight() int {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	total := 0
-	for _, v := range k.inFlight {
-		total += v
-	}
-	return total
-}
-
 // WatchPods watches all demo pods and publishes PodEvent + SignalEvent on changes.
 // Restarts the watch automatically on errors. Runs until ctx is cancelled.
 func (k *K8s) WatchPods(ctx context.Context) {
@@ -104,7 +73,7 @@ func (k *K8s) WatchPods(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		w, err := k.cs.CoreV1().Pods(demoNamespace).Watch(ctx, metav1.ListOptions{
+		w, err := k.cs.CoreV1().Pods(k.namespace).Watch(ctx, metav1.ListOptions{
 			LabelSelector: "app=demo",
 		})
 		if err != nil {
@@ -126,9 +95,9 @@ func (k *K8s) WatchPods(ctx context.Context) {
 				}
 			}
 
-			inFlight := k.getInFlight(pod.Name)
+			inFlight := 0
 			if terminating {
-				inFlight = k.TotalInFlight()
+				inFlight = k.inFlightFn()
 			}
 			k.pub.Publish(PodEvent{
 				Type:           EventPod,
@@ -198,7 +167,7 @@ func (k *K8s) WatchPods(ctx context.Context) {
 										GraceRemaining: remaining,
 										GracePeriod:    int32(podGracePeriod(p)), //nolint:gosec // G115: grace period in seconds, always within int32 range
 										PreStopSleep:   podPreStopSleep(p),
-										InFlight:       k.TotalInFlight(),
+										InFlight:       k.inFlightFn(),
 									})
 								case <-ctx.Done():
 									return
@@ -223,7 +192,6 @@ func (k *K8s) WatchPods(ctx context.Context) {
 				})
 				k.mu.Lock()
 				delete(k.podSpecs, pod.Name)
-				delete(k.inFlight, pod.Name)
 				k.mu.Unlock()
 			} else {
 				k.mu.Lock()
@@ -244,7 +212,7 @@ func (k *K8s) WatchEndpoints(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		w, err := k.cs.DiscoveryV1().EndpointSlices(demoNamespace).Watch(ctx, metav1.ListOptions{
+		w, err := k.cs.DiscoveryV1().EndpointSlices(k.namespace).Watch(ctx, metav1.ListOptions{
 			LabelSelector: "kubernetes.io/service-name=demo-svc",
 		})
 		if err != nil {
@@ -300,7 +268,7 @@ func (k *K8s) WatchEndpoints(ctx context.Context) {
 // podProxy calls an admin endpoint on a specific pod via the k8s API server proxy.
 func (k *K8s) podProxy(ctx context.Context, podName, method, path string, body []byte) error {
 	result := k.cs.CoreV1().RESTClient().Verb(method).
-		Namespace(demoNamespace).
+		Namespace(k.namespace).
 		Resource("pods").
 		Name(podName).
 		SubResource("proxy").
@@ -388,7 +356,7 @@ func (k *K8s) ScaleDeployment(ctx context.Context, replicas int32) error {
 	if err != nil {
 		return fmt.Errorf("marshal scale patch: %w", err)
 	}
-	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	_, err = k.cs.AppsV1().Deployments(k.namespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -411,7 +379,7 @@ func (k *K8s) SetStrategy(ctx context.Context, preset string) error {
 	if err != nil {
 		return fmt.Errorf("marshal strategy patch: %w", err)
 	}
-	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	_, err = k.cs.AppsV1().Deployments(k.namespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -430,7 +398,7 @@ func (k *K8s) SetGracePeriod(ctx context.Context, seconds int32) error {
 	if err != nil {
 		return fmt.Errorf("marshal grace period patch: %w", err)
 	}
-	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	_, err = k.cs.AppsV1().Deployments(k.namespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -451,7 +419,7 @@ func (k *K8s) TriggerRollout(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("marshal rollout patch: %w", err)
 	}
-	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	_, err = k.cs.AppsV1().Deployments(k.namespace).Patch(
 		ctx, "demo", types.MergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -486,7 +454,7 @@ func (k *K8s) SetPreStopSleep(ctx context.Context, seconds int32) error {
 	if err != nil {
 		return fmt.Errorf("marshal prestop patch: %w", err)
 	}
-	_, err = k.cs.AppsV1().Deployments(demoNamespace).Patch(
+	_, err = k.cs.AppsV1().Deployments(k.namespace).Patch(
 		ctx, "demo", types.StrategicMergePatchType, patch, metav1.PatchOptions{},
 	)
 	return err
@@ -519,7 +487,7 @@ func (k *K8s) WatchDeployment(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		w, err := k.cs.AppsV1().Deployments(demoNamespace).Watch(ctx, metav1.ListOptions{
+		w, err := k.cs.AppsV1().Deployments(k.namespace).Watch(ctx, metav1.ListOptions{
 			FieldSelector: "metadata.name=demo",
 		})
 		if err != nil {
