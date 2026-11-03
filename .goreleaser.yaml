@@ -38,6 +38,18 @@ builds:
     main: ./cmd/demo-ctl
     # Set the modified timestamp on the output binary to ensure that builds are reproducible.
     mod_timestamp: "{{ .CommitTimestamp }}"
+  - binary: 'loadgen'
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+    main: ./cmd/loadgen
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 checksum:
   name_template: "checksums.txt"

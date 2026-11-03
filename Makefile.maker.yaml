@@ -8,6 +8,9 @@ binaries:
   - name: demo-server
     fromPackage: ./cmd/demo-server
     installTo: bin/
+  - name: loadgen
+    fromPackage: ./cmd/loadgen
+    installTo: bin/
 
 golang:
   setGoModVersion: true
