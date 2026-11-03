@@ -75,7 +75,6 @@ func (s *APIServer) Handler() http.Handler {
 	mux.HandleFunc("POST /session/{id}/internal/event", s.handleInternalEvent)
 
 	// SPA root + fallback (must be last — catch-all for client-side routes)
-	mux.HandleFunc("GET /session/{id}/", s.handleSessionUI)
 	mux.HandleFunc("GET /session/{id}/{path...}", s.handleSessionUI)
 
 	return mux
