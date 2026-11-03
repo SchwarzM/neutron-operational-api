@@ -101,6 +101,11 @@ kind: Ingress
 metadata:
   name: demo-ctl
   namespace: demo-system
+  annotations:
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ~* /session/[^/]+/internal/ {
+        return 403;
+      }
 spec:
   ingressClassName: nginx
   rules:

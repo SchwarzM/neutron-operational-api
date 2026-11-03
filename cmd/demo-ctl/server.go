@@ -71,7 +71,7 @@ func (s *APIServer) Handler() http.Handler {
 	// Session destroy
 	mux.HandleFunc("POST /session/{id}/api/cluster/destroy", s.handleClusterDestroy)
 
-	// Loadgen event callback (in-cluster only — not exposed via ingress path rules)
+	// Loadgen event callback — reachable via ingress; session ID in the URL is the only access control.
 	mux.HandleFunc("POST /session/{id}/internal/event", s.handleInternalEvent)
 
 	// SPA root + fallback (must be last — catch-all for client-side routes)
