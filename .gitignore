@@ -7,4 +7,5 @@ web/node_modules/
 web/dist/
 *.local
 *.yaml
+!deploy/*.yaml
 n-o-d-kubeconfig.yaml

@@ -26,11 +26,16 @@ setInterval(() => {
 }, 500)
 
 // ---- SSE connection ----
+// Extract session ID from /session/{id}/... URL pattern.
+const _parts = window.location.pathname.split('/')
+const _sessionId = _parts[2] ?? ''
+const base = _sessionId ? `/session/${_sessionId}` : ''
+
 let es = null
 
 export function connectSSE() {
   if (es) return
-  es = new EventSource('/api/stream')
+  es = new EventSource(`${base}/api/stream`)
   es.onmessage = (e) => {
     let ev
     try { ev = JSON.parse(e.data) } catch { return }
@@ -92,16 +97,19 @@ async function apiPut(path, body) {
 }
 
 export const api = {
-  setReplicas:    (n)   => apiPut('/api/deployment/replicas', { replicas: n }),
-  setStrategy:    (s)   => apiPut('/api/deployment/strategy', { strategy: s }),
-  setGrace:       (sec) => apiPut('/api/deployment/grace',    { seconds: sec }),
-  setPreStop:     (sec) => apiPut('/api/deployment/prestop',  { seconds: sec }),
-  triggerRollout: ()    => apiPost('/api/deployment/rollout'),
-  setPodReady:       (name, ready) => apiPut(`/api/pod/${name}/ready`, { ready }),
-  setPodDelay:       (name, ms) => apiPut(`/api/pod/${name}/delay`, { ms }),
-  startTraffic:      () => apiPost('/api/traffic/start'),
-  stopTraffic:       () => apiPost('/api/traffic/stop'),
-  setRPS:            (rps) => apiPut('/api/traffic/rps', { rps }),
-  setDuration:       (ms) => apiPut('/api/traffic/duration', { ms }),
-  destroyCluster:    () => apiPost('/api/cluster/destroy'),
+  setReplicas:    (n)   => apiPut(`${base}/api/deployment/replicas`, { replicas: n }),
+  setStrategy:    (s)   => apiPut(`${base}/api/deployment/strategy`, { strategy: s }),
+  setGrace:       (sec) => apiPut(`${base}/api/deployment/grace`,    { seconds: sec }),
+  setPreStop:     (sec) => apiPut(`${base}/api/deployment/prestop`,  { seconds: sec }),
+  triggerRollout: ()    => apiPost(`${base}/api/deployment/rollout`),
+  setPodReady:    (name, ready) => apiPut(`${base}/api/pod/${name}/ready`,  { ready }),
+  setPodDelay:    (name, ms)    => apiPut(`${base}/api/pod/${name}/delay`,  { ms }),
+  startTraffic:   ()    => apiPost(`${base}/api/traffic/start`),
+  stopTraffic:    ()    => apiPost(`${base}/api/traffic/stop`),
+  setRPS:         (rps) => apiPut(`${base}/api/traffic/rps`,         { rps }),
+  setDuration:    (ms)  => apiPut(`${base}/api/traffic/duration`,    { ms }),
+  destroyCluster: async () => {
+    await apiPost(`${base}/api/cluster/destroy`)
+    window.location.href = '/'
+  },
 }
