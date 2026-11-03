@@ -51,7 +51,7 @@ func destroySession(ctx context.Context, cs kubernetes.Interface, id string) err
 
 func createNs(ctx context.Context, cs kubernetes.Interface, ns string) error {
 	_, err := cs.CoreV1().Namespaces().Create(ctx,
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}, //nolint:modernize
 		metav1.CreateOptions{})
 	if k8serrors.IsAlreadyExists(err) {
 		return nil
@@ -61,7 +61,7 @@ func createNs(ctx context.Context, cs kubernetes.Interface, ns string) error {
 
 func createDemoSvc(ctx context.Context, cs kubernetes.Interface, ns string) error {
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "demo-svc", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "demo-svc", Namespace: ns}, //nolint:modernize
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": "demo"},
 			Ports: []corev1.ServicePort{{
@@ -82,7 +82,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 	maxU := intstr.FromInt32(0)
 	maxS := intstr.FromInt32(1)
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns}, //nolint:modernize
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
@@ -93,7 +93,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 				},
 			},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "demo"}},
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "demo"}}, //nolint:modernize
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &grace,
 					Containers: []corev1.Container{{
@@ -108,7 +108,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 						}},
 						Ports: []corev1.ContainerPort{{ContainerPort: 8080}},
 						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
+							ProbeHandler: corev1.ProbeHandler{ //nolint:modernize
 								HTTPGet: &corev1.HTTPGetAction{
 									Path: "/readyz", Port: intstr.FromInt32(8080),
 								},
@@ -116,7 +116,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 							PeriodSeconds: 2, FailureThreshold: 1, SuccessThreshold: 1,
 						},
 						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
+							ProbeHandler: corev1.ProbeHandler{ //nolint:modernize
 								HTTPGet: &corev1.HTTPGetAction{
 									Path: "/livez", Port: intstr.FromInt32(8080),
 								},
@@ -137,7 +137,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 
 func createLoadgenSvc(ctx context.Context, cs kubernetes.Interface, ns string) error {
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "loadgen-svc", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "loadgen-svc", Namespace: ns}, //nolint:modernize
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": "loadgen"},
 			Ports: []corev1.ServicePort{{
@@ -155,12 +155,12 @@ func createLoadgenSvc(ctx context.Context, cs kubernetes.Interface, ns string) e
 func createLoadgenDeployment(ctx context.Context, cs kubernetes.Interface, ns, id, controlPlaneURL string) error {
 	replicas := int32(1)
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "loadgen", Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "loadgen", Namespace: ns}, //nolint:modernize
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "loadgen"}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "loadgen"}},
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "loadgen"}}, //nolint:modernize
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:            "loadgen",

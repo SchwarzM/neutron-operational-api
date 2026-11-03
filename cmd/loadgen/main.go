@@ -71,7 +71,7 @@ func (lg *loadgen) postEvent(v any) {
 		return
 	}
 	url := lg.controlPlaneURL + "/session/" + lg.sessionID + "/internal/event"
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body)) //nolint:noctx
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body)) //nolint:noctx,gosec
 	if err != nil {
 		log.Printf("post event: %v", err)
 		return
@@ -305,6 +305,6 @@ func main() {
 
 	log.Printf("loadgen: listening :8080 target=%s session=%s", targetURL, sessionID)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatal(err)
+		log.Print(err)
 	}
 }

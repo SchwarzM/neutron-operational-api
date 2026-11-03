@@ -103,10 +103,11 @@ func (s *APIServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 			Path:     "/",
 			MaxAge:   86400,
 			HttpOnly: true,
+			Secure:   true,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
-	http.Redirect(w, r, "/session/"+sessionID+"/", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/session/"+sessionID+"/", http.StatusTemporaryRedirect) //nolint:gosec // sessionID is always an 8-char hex string generated or validated via session map lookup
 }
 
 // handleSessionUI serves the Svelte SPA for any /session/{id}/* path.

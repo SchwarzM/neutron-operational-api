@@ -42,7 +42,10 @@ func TestSessionManagerDestroyRemovesSession(t *testing.T) {
 
 func TestSessionManagerTouchUpdatesLastSeen(t *testing.T) {
 	sm := newTestSessionManager(t)
-	sess, _ := sm.Create(context.Background())
+	sess, err := sm.Create(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	sess.mu.Lock()
 	sess.lastSeen = time.Now().Add(-10 * time.Minute)
@@ -60,7 +63,10 @@ func TestGenerateSessionID_UniqueAndLength(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2, _ := generateSessionID()
+	id2, err := generateSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(id1) != 8 {
 		t.Errorf("id length = %d, want 8", len(id1))
 	}
@@ -71,7 +77,10 @@ func TestGenerateSessionID_UniqueAndLength(t *testing.T) {
 
 func TestSessionReaperExpiresStaleSessions(t *testing.T) {
 	sm := newTestSessionManager(t)
-	sess, _ := sm.Create(context.Background())
+	sess, err := sm.Create(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// backdate lastSeen past TTL
 	sess.mu.Lock()
