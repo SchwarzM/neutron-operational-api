@@ -14,11 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 )
 
 type restMapper interface {
@@ -66,17 +62,4 @@ func applyManifests(ctx context.Context, dc dynamic.Interface, mapper restMapper
 			return fmt.Errorf("create %s %s: %w", gvk.Kind, obj.GetName(), err)
 		}
 	}
-}
-
-func applyManifestsFromConfig(ctx context.Context, cfg *rest.Config, manifest []byte) error {
-	dc, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("dynamic client: %w", err)
-	}
-	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("discovery client: %w", err)
-	}
-	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(disc))
-	return applyManifests(ctx, dc, mapper, manifest)
 }

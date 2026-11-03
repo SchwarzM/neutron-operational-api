@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
+	"path/filepath"
 	"time"
-
-	_ "embed"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,78 +19,37 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-//go:embed kind-config.yaml
-var kindConfigYAML []byte
-
-//go:embed nginx-ingress-kind.yaml
-var nginxIngressYAML []byte
-
 const (
-	clusterName   = "k8s-readiness-demo"
-	demoNamespace = "demo"
-	ghcrImage     = "ghcr.io/schwarzm/neutron-operational-api:edge"
+	demoNamespace    = "demo"
+	ghcrImage        = "ghcr.io/schwarzm/neutron-operational-api:edge"
+	ingressClassName = "nginx"
 )
 
-// Cluster owns the kind cluster lifecycle and bootstraps all k8s objects.
+// Cluster bootstraps demo k8s objects in an existing cluster.
 type Cluster struct {
-	pub  Publisher
-	cs   kubernetes.Interface
-	rcfg *rest.Config
+	pub        Publisher
+	cs         kubernetes.Interface
+	rcfg       *rest.Config
+	ingressURL string
 }
 
 func NewCluster(pub Publisher) *Cluster {
 	return &Cluster{pub: pub}
 }
 
-// Bootstrap creates the kind cluster, installs nginx-ingress, and creates
-// the demo namespace, Service, and Ingress. Blocks until the cluster is ready.
+// Bootstrap connects to an existing cluster and creates the demo namespace,
+// Deployment, Service, and Ingress. Blocks until the Ingress has an external address.
 func (c *Cluster) Bootstrap(ctx context.Context) error {
 	c.pub.Publish(ClusterEvent{Type: EventCluster, State: "creating"})
 
-	cfgFile, err := os.CreateTemp("", "kind-config-*.yaml")
+	var err error
+	c.rcfg, err = buildConfig()
 	if err != nil {
-		return fmt.Errorf("write kind config: %w", err)
-	}
-	defer os.Remove(cfgFile.Name())
-	if _, err = cfgFile.Write(kindConfigYAML); err != nil {
-		return fmt.Errorf("write kind config content: %w", err)
-	}
-	cfgFile.Close()
-
-	// Always start clean: delete any existing cluster first.
-	existOut, err := exec.CommandContext(ctx, "kind", "get", "clusters").Output()
-	if err != nil {
-		existOut = nil // kind not available or failed; proceed, subsequent calls will report errors
-	}
-	if bytes.Contains(existOut, []byte(clusterName)) {
-		if err := kindRun(ctx, "delete", "cluster", "--name", clusterName); err != nil {
-			return fmt.Errorf("kind delete cluster: %w", err)
-		}
-	}
-	if err := kindRun(ctx, "create", "cluster", "--name", clusterName, "--config", cfgFile.Name()); err != nil {
-		return fmt.Errorf("kind create cluster: %w", err)
-	}
-
-	kubeconfig, err := kindOutput(ctx, "get", "kubeconfig", "--name", clusterName)
-	if err != nil {
-		return fmt.Errorf("get kubeconfig: %w", err)
-	}
-
-	c.rcfg, err = clientcmd.RESTConfigFromKubeConfig(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("parse kubeconfig: %w", err)
+		return fmt.Errorf("build kubeconfig: %w", err)
 	}
 	c.cs, err = kubernetes.NewForConfig(c.rcfg)
 	if err != nil {
 		return fmt.Errorf("build clientset: %w", err)
-	}
-
-	if err := applyManifestsFromConfig(ctx, c.rcfg, nginxIngressYAML); err != nil {
-		return fmt.Errorf("apply nginx-ingress: %w", err)
-	}
-
-	if err := c.waitForIngressController(ctx); err != nil {
-		return fmt.Errorf("wait for ingress-controller ready: %w", err)
 	}
 
 	if err := c.createNamespace(ctx); err != nil {
@@ -103,33 +58,35 @@ func (c *Cluster) Bootstrap(ctx context.Context) error {
 	if err := c.createService(ctx); err != nil {
 		return err
 	}
-	// Retry until the admission webhook endpoint is accepting connections.
-	if err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 60*time.Second, true,
-		func(ctx context.Context) (bool, error) {
-			err := c.createIngress(ctx)
-			if err == nil {
-				return true, nil
-			}
-			if strings.Contains(err.Error(), "webhook") {
-				return false, nil // webhook not ready yet — retry
-			}
-			return false, err
-		}); err != nil {
+	if err := c.createIngress(ctx); err != nil {
 		return fmt.Errorf("create ingress: %w", err)
 	}
 	if err := c.createDeployment(ctx); err != nil {
 		return err
 	}
 
+	addr, err := c.waitForIngressAddress(ctx)
+	if err != nil {
+		return fmt.Errorf("wait for ingress address: %w", err)
+	}
+	c.ingressURL = "http://" + addr + "/"
+
 	c.pub.Publish(ClusterEvent{Type: EventCluster, State: "ready"})
 	return nil
 }
 
-// Destroy deletes the kind cluster.
+// Destroy removes the demo namespace and everything in it.
 func (c *Cluster) Destroy(ctx context.Context) error {
 	c.pub.Publish(ClusterEvent{Type: EventCluster, State: "destroying"})
-	return kindRun(ctx, "delete", "cluster", "--name", clusterName)
+	err := c.cs.CoreV1().Namespaces().Delete(ctx, demoNamespace, metav1.DeleteOptions{})
+	if k8serrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
+
+// IngressURL returns the external URL of the demo ingress (valid after Bootstrap).
+func (c *Cluster) IngressURL() string { return c.ingressURL }
 
 // Clientset returns the k8s client (valid after Bootstrap).
 func (c *Cluster) Clientset() kubernetes.Interface { return c.cs }
@@ -137,27 +94,40 @@ func (c *Cluster) Clientset() kubernetes.Interface { return c.cs }
 // RESTConfig returns the REST config (valid after Bootstrap).
 func (c *Cluster) RESTConfig() *rest.Config { return c.rcfg }
 
-func (c *Cluster) waitForIngressController(ctx context.Context) error {
-	return wait.PollUntilContextTimeout(ctx, 3*time.Second, 4*time.Minute, true,
+// buildConfig returns an in-cluster config when running inside a pod,
+// otherwise falls back to KUBECONFIG env / ~/.kube/config.
+func buildConfig() (*rest.Config, error) {
+	if cfg, err := rest.InClusterConfig(); err == nil {
+		return cfg, nil
+	}
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if kubeconfig == "" {
+		kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	}
+	return clientcmd.BuildConfigFromFlags("", kubeconfig)
+}
+
+func (c *Cluster) waitForIngressAddress(ctx context.Context) (string, error) {
+	var addr string
+	err := wait.PollUntilContextTimeout(ctx, 3*time.Second, 3*time.Minute, true,
 		func(ctx context.Context) (bool, error) {
-			pods, err := c.cs.CoreV1().Pods("ingress-nginx").List(ctx, metav1.ListOptions{
-				LabelSelector: "app.kubernetes.io/component=controller",
-			})
+			ing, err := c.cs.NetworkingV1().Ingresses(demoNamespace).Get(ctx, "demo", metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
-			if len(pods.Items) == 0 {
-				return false, nil
-			}
-			for _, p := range pods.Items {
-				for _, cond := range p.Status.Conditions {
-					if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-						return true, nil
-					}
+			for _, lb := range ing.Status.LoadBalancer.Ingress {
+				if lb.Hostname != "" {
+					addr = lb.Hostname
+					return true, nil
+				}
+				if lb.IP != "" {
+					addr = lb.IP
+					return true, nil
 				}
 			}
 			return false, nil
 		})
+	return addr, err
 }
 
 func (c *Cluster) createNamespace(ctx context.Context) error {
@@ -189,10 +159,9 @@ func (c *Cluster) createService(ctx context.Context) error {
 
 func (c *Cluster) createIngress(ctx context.Context) error {
 	pathType := networkingv1.PathTypePrefix
-	className := "nginx"
+	className := ingressClassName
 	ing := &networkingv1.Ingress{
-		Name:      "demo",
-		Namespace: demoNamespace,
+		Name: "demo", Namespace: demoNamespace,
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
 			Rules: []networkingv1.IngressRule{{
@@ -283,15 +252,4 @@ func (c *Cluster) createDeployment(ctx context.Context) error {
 		return nil
 	}
 	return err
-}
-
-func kindRun(ctx context.Context, args ...string) error {
-	cmd := exec.CommandContext(ctx, "kind", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func kindOutput(ctx context.Context, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, "kind", args...).Output()
 }

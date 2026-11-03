@@ -32,7 +32,7 @@ func run() error {
 	go k8s.WatchEndpoints(ctx)
 	go k8s.WatchDeployment(ctx)
 
-	lg := NewLoadGen(hub, k8s, "http://localhost:8080/")
+	lg := NewLoadGen(hub, k8s, cluster.IngressURL())
 
 	srv := NewAPIServer(hub, cluster, k8s, lg, stop)
 
