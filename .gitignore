@@ -6,3 +6,5 @@ cmd/demo-ctl/assets/
 web/node_modules/
 web/dist/
 *.local
+*.yaml
+n-o-d-kubeconfig.yaml
