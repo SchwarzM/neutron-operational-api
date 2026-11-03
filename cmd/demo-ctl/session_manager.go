@@ -6,18 +6,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
-	sessionCookieName = "demo-session"
-	sessionTTL        = 30 * time.Minute
-	reaperInterval    = 5 * time.Minute
+	sessionCookieName    = "demo-session"
+	sessionTTL           = 30 * time.Minute
+	reaperInterval       = 5 * time.Minute
+	orphanedNamespaceAge = 5 * time.Minute
 )
 
 // Session holds all state for one active demo session.
@@ -159,6 +162,43 @@ func (sm *SessionManager) reaper() {
 			if err := sm.Destroy(context.Background(), id); err != nil {
 				log.Printf("reaper: destroy session %s: %v", id, err)
 			}
+		}
+
+		sm.reconcileNamespaces(context.Background())
+	}
+}
+
+// reconcileNamespaces deletes any demo-* namespace that has no live session and
+// is old enough that it cannot be a namespace currently being set up.
+func (sm *SessionManager) reconcileNamespaces(ctx context.Context) {
+	nsList, err := sm.cs.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Printf("reconcile namespaces: list: %v", err)
+		return
+	}
+
+	sm.mu.RLock()
+	active := make(map[string]bool, len(sm.sessions))
+	for id := range sm.sessions {
+		active[id] = true
+	}
+	sm.mu.RUnlock()
+
+	for _, ns := range nsList.Items {
+		name := ns.Name
+		if !strings.HasPrefix(name, "demo-") || name == "demo-system" {
+			continue
+		}
+		id := strings.TrimPrefix(name, "demo-")
+		if active[id] {
+			continue
+		}
+		if time.Since(ns.CreationTimestamp.Time) < orphanedNamespaceAge {
+			continue
+		}
+		log.Printf("reconcile: deleting orphaned namespace %s", name)
+		if err := destroySession(ctx, sm.cs, id); err != nil {
+			log.Printf("reconcile: delete namespace %s: %v", name, err)
 		}
 	}
 }
