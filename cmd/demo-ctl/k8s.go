@@ -530,8 +530,8 @@ func (k *K8s) WatchDeployment(ctx context.Context) {
 				ReadyReplicas:     dep.Status.ReadyReplicas,
 				UpdatedReplicas:   dep.Status.UpdatedReplicas,
 				AvailableReplicas: dep.Status.AvailableReplicas,
-				RolloutInProgress: dep.Status.UpdatedReplicas < desired ||
-					dep.Status.AvailableReplicas < desired,
+				RolloutInProgress: dep.Generation > dep.Status.ObservedGeneration ||
+					dep.Status.UpdatedReplicas < desired,
 				Strategy:     presetForStrategy(dep.Spec.Strategy),
 				GracePeriod:  grace,
 				PreStopSleep: preStopSleep(dep),
