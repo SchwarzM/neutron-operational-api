@@ -71,7 +71,7 @@ func TestLoadgenSetDurationClampsNegative(t *testing.T) {
 	}
 }
 
-func TestLoadgenStartStopIdempotent(t *testing.T) {
+func TestLoadgenStartStopIdempotent(_ *testing.T) {
 	lg := &loadgen{targetURL: "http://127.0.0.1:0", sessionID: "x", controlPlaneURL: "http://127.0.0.1:0"}
 	lg.rps.Store(1)
 	lg.Start()

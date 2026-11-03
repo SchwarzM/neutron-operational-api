@@ -93,7 +93,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 				},
 			},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "demo"}}, //nolint:modernize
+			ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "demo"}},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &grace,
 					Containers: []corev1.Container{{
@@ -160,7 +160,7 @@ func createLoadgenDeployment(ctx context.Context, cs kubernetes.Interface, ns, i
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "loadgen"}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "loadgen"}}, //nolint:modernize
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "loadgen"}},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:            "loadgen",
