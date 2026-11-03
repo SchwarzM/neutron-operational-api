@@ -13,7 +13,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 const (
@@ -53,15 +52,13 @@ type SessionManager struct {
 	mu              sync.RWMutex
 	sessions        map[string]*Session
 	cs              kubernetes.Interface
-	rcfg            *rest.Config
 	controlPlaneURL string
 }
 
-func NewSessionManager(cs kubernetes.Interface, rcfg *rest.Config, controlPlaneURL string) *SessionManager {
+func NewSessionManager(cs kubernetes.Interface, controlPlaneURL string) *SessionManager {
 	sm := &SessionManager{
 		sessions:        make(map[string]*Session),
 		cs:              cs,
-		rcfg:            rcfg,
 		controlPlaneURL: controlPlaneURL,
 	}
 	go sm.reaper()
@@ -84,7 +81,7 @@ func (sm *SessionManager) Create(ctx context.Context) (*Session, error) {
 	ctx2, cancel := context.WithCancel(context.Background())
 	inFlight := new(atomic.Int64)
 
-	k8s := NewK8s(hub, sm.cs, sm.rcfg, sessionNamespace(id), func() int {
+	k8s := NewK8s(hub, sm.cs, sessionNamespace(id), func() int {
 		return int(inFlight.Load())
 	})
 

@@ -59,6 +59,7 @@ type requestEvent struct {
 
 type statsEvent struct {
 	Type        string  `json:"type"`
+	Running     bool    `json:"running"`
 	RPS         float64 `json:"rps"`
 	SuccessRate float64 `json:"successRate"`
 	P50Ms       int64   `json:"p50Ms"`
@@ -210,6 +211,10 @@ func (lg *loadgen) statsLoop(ctx context.Context) {
 }
 
 func (lg *loadgen) publishStats() {
+	lg.mu.Lock()
+	running := lg.running
+	lg.mu.Unlock()
+
 	lg.mu2.Lock()
 	window := time.Now().Add(-5 * time.Second)
 	var recent []lgSample
@@ -221,7 +226,7 @@ func (lg *loadgen) publishStats() {
 	lg.mu2.Unlock()
 
 	if len(recent) == 0 {
-		lg.postEvent(statsEvent{Type: "stats", InFlight: int(lg.inFlight.Load())})
+		lg.postEvent(statsEvent{Type: "stats", Running: running, InFlight: int(lg.inFlight.Load())})
 		return
 	}
 
@@ -237,6 +242,7 @@ func (lg *loadgen) publishStats() {
 
 	lg.postEvent(statsEvent{
 		Type:        "stats",
+		Running:     running,
 		RPS:         float64(len(recent)) / 5.0,
 		SuccessRate: float64(success) / float64(len(recent)),
 		P50Ms:       durations[len(durations)*50/100],

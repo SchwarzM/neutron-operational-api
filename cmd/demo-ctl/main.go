@@ -39,7 +39,7 @@ func run() error {
 		controlPlaneURL = "http://localhost:9090"
 	}
 
-	sessions := NewSessionManager(cs, rcfg, controlPlaneURL)
+	sessions := NewSessionManager(cs, controlPlaneURL)
 	srv := NewAPIServer(sessions)
 
 	httpSrv := &http.Server{

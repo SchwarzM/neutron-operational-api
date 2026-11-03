@@ -111,7 +111,6 @@ func newTestSessionManager(t *testing.T) *SessionManager {
 	return &SessionManager{
 		sessions:        make(map[string]*Session),
 		cs:              cs,
-		rcfg:            nil,
 		controlPlaneURL: "http://localhost:9090",
 	}
 }

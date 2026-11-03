@@ -23,7 +23,7 @@ func TestWatchPodsPublishesDeletedEvent(t *testing.T) {
 	})
 
 	pub := &capPublisher{}
-	k := NewK8s(pub, cs, nil, "demo-test", func() int { return 0 })
+	k := NewK8s(pub, cs, "demo-test", func() int { return 0 })
 
 	ctx := t.Context()
 
@@ -83,7 +83,7 @@ func TestWatchDeploymentPublishesEvent(t *testing.T) {
 		return true, fakeWatcher, nil
 	})
 	pub := &capPublisher{}
-	k := NewK8s(pub, cs, nil, "demo-test", func() int { return 0 })
+	k := NewK8s(pub, cs, "demo-test", func() int { return 0 })
 
 	ctx := t.Context()
 

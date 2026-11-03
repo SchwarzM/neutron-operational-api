@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -17,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 const (
@@ -28,7 +29,6 @@ const (
 type K8s struct {
 	pub        Publisher
 	cs         kubernetes.Interface
-	rcfg       *rest.Config
 	namespace  string
 	inFlightFn func() int
 
@@ -36,11 +36,10 @@ type K8s struct {
 	podSpecs map[string]*corev1.Pod
 }
 
-func NewK8s(pub Publisher, cs kubernetes.Interface, rcfg *rest.Config, namespace string, inFlightFn func() int) *K8s {
+func NewK8s(pub Publisher, cs kubernetes.Interface, namespace string, inFlightFn func() int) *K8s {
 	return &K8s{
 		pub:        pub,
 		cs:         cs,
-		rcfg:       rcfg,
 		namespace:  namespace,
 		inFlightFn: inFlightFn,
 		podSpecs:   make(map[string]*corev1.Pod),
@@ -265,17 +264,35 @@ func (k *K8s) WatchEndpoints(ctx context.Context) {
 	}
 }
 
-// podProxy calls an admin endpoint on a specific pod via the k8s API server proxy.
+// podProxy calls an admin endpoint on a specific pod directly via its pod IP.
+// Using the pod IP avoids the Kubernetes API server proxy, which requires
+// network connectivity from the control plane back to worker nodes.
 func (k *K8s) podProxy(ctx context.Context, podName, method, path string, body []byte) error {
-	result := k.cs.CoreV1().RESTClient().Verb(method).
-		Namespace(k.namespace).
-		Resource("pods").
-		Name(podName).
-		SubResource("proxy").
-		Suffix(path).
-		Body(bytes.NewReader(body)).
-		Do(ctx)
-	return result.Error()
+	k.mu.Lock()
+	pod, ok := k.podSpecs[podName]
+	k.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("pod %s not found", podName)
+	}
+	ip := pod.Status.PodIP
+	if ip == "" {
+		return fmt.Errorf("pod %s has no IP yet", podName)
+	}
+	url := "http://" + net.JoinHostPort(ip, "8080") + "/" + path
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("pod %s admin: HTTP %d", podName, resp.StatusCode)
+	}
+	return nil
 }
 
 func isPodReady(pod *corev1.Pod) bool {

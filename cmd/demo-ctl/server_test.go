@@ -11,7 +11,7 @@ import (
 // TestHandlerRegistration ensures Handler() does not panic on route registration.
 // A conflicting mux pattern would panic at startup before serving any request.
 func TestHandlerRegistration(t *testing.T) {
-	sm := NewSessionManager(fake.NewClientset(), nil, "http://localhost:9090")
+	sm := NewSessionManager(fake.NewClientset(), "http://localhost:9090")
 	srv := NewAPIServer(sm)
 	defer func() {
 		if r := recover(); r != nil {
@@ -26,7 +26,7 @@ func TestHandlerRegistration(t *testing.T) {
 
 // TestHealthz verifies the /healthz endpoint returns 200.
 func TestHealthz(t *testing.T) {
-	sm := NewSessionManager(fake.NewClientset(), nil, "http://localhost:9090")
+	sm := NewSessionManager(fake.NewClientset(), "http://localhost:9090")
 	srv := NewAPIServer(sm)
 	h := srv.Handler()
 
@@ -41,7 +41,7 @@ func TestHealthz(t *testing.T) {
 
 // TestRootRedirectsToSession verifies GET / creates a session and redirects.
 func TestRootRedirectsToSession(t *testing.T) {
-	sm := NewSessionManager(fake.NewClientset(), nil, "http://localhost:9090")
+	sm := NewSessionManager(fake.NewClientset(), "http://localhost:9090")
 	srv := NewAPIServer(sm)
 	h := srv.Handler()
 

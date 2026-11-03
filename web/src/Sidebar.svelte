@@ -1,5 +1,5 @@
 <script>
-  import { pods, signals, deployment, api } from './store.js'
+  import { pods, signals, deployment, stats, api } from './store.js'
 
   // Deployment controls — synced from backend once it arrives
   let strategy = $state('surge')
@@ -42,8 +42,8 @@
     await api.setPodDelay(name, ms)
   }
 
-  // Traffic
-  let trafficRunning = $state(false)
+  // Traffic — trafficRunning is authoritative from the server via stats SSE
+  let trafficRunning = $derived($stats?.running ?? false)
   let rps            = $state(5)
   let durationMs     = $state(0)
 
@@ -53,7 +53,6 @@
     } else {
       await api.startTraffic()
     }
-    trafficRunning = !trafficRunning
   }
   async function applyRPS() {
     await api.setRPS(Number(rps))
