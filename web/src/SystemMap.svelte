@@ -6,7 +6,7 @@
 
   // ---- fixed layout ----
   const W = 1000, H = 400
-  const GEN  = { x: 80,  y: 200, w: 100, h: 50, label: 'load gen',  sub: 'localhost:8080' }
+  const GEN  = { x: 80,  y: 200, w: 100, h: 50, label: 'load gen',  sub: 'in-cluster' }
   const ING  = { x: 280, y: 200, w: 130, h: 50, label: 'ingress',   sub: 'nginx' }
   const SVC  = { x: 490, y: 200, w: 130, h: 50, label: 'service',   sub: 'demo-svc' }
   const PODS_X = 730

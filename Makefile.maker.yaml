@@ -45,7 +45,7 @@ githubWorkflow:
       - "*.md"
   pushContainerToGhcr:
     enabled: true
-    platforms: "linux/amd64,linux/arm64"
+    platforms: "linux/amd64"
     tagStrategy: [edge, latest, semver, sha]
   release:
     enabled: true

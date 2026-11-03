@@ -105,13 +105,16 @@ GO_TESTFLAGS  +=
 GO_TESTENV    +=
 GO_BUILDENV   +=
 
-build-all: build/demo-ctl build/demo-server
+build-all: build/demo-ctl build/demo-server build/loadgen
 
 build/demo-ctl: FORCE
 	env $(GO_BUILDENV) go build $(GO_BUILDFLAGS) -ldflags '-s -w $(GO_LDFLAGS)' -o build/demo-ctl ./cmd/demo-ctl
 
 build/demo-server: FORCE
 	env $(GO_BUILDENV) go build $(GO_BUILDFLAGS) -ldflags '-s -w $(GO_LDFLAGS)' -o build/demo-server ./cmd/demo-server
+
+build/loadgen: FORCE
+	env $(GO_BUILDENV) go build $(GO_BUILDFLAGS) -ldflags '-s -w $(GO_LDFLAGS)' -o build/loadgen ./cmd/loadgen
 
 DESTDIR =
 ifeq ($(UNAME_S),Darwin)
@@ -120,11 +123,13 @@ else
 	PREFIX = /usr
 endif
 
-install: FORCE build/demo-ctl build/demo-server
+install: FORCE build/demo-ctl build/demo-server build/loadgen
 	install -d -m 0755 "$(DESTDIR)$(PREFIX)/bin"
 	install -m 0755 build/demo-ctl "$(DESTDIR)$(PREFIX)/bin/demo-ctl"
 	install -d -m 0755 "$(DESTDIR)$(PREFIX)/bin"
 	install -m 0755 build/demo-server "$(DESTDIR)$(PREFIX)/bin/demo-server"
+	install -d -m 0755 "$(DESTDIR)$(PREFIX)/bin"
+	install -m 0755 build/loadgen "$(DESTDIR)$(PREFIX)/bin/loadgen"
 
 # which packages to test with test runner
 GO_TESTPKGS := $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./...)
@@ -216,6 +221,7 @@ help: FORCE
 	@printf "  \e[36mbuild-all\e[0m              Build all binaries.\n"
 	@printf "  \e[36mbuild/demo-ctl\e[0m         Build demo-ctl.\n"
 	@printf "  \e[36mbuild/demo-server\e[0m      Build demo-server.\n"
+	@printf "  \e[36mbuild/loadgen\e[0m          Build loadgen.\n"
 	@printf "  \e[36minstall\e[0m                Install all binaries. This option understands the conventional 'DESTDIR' and 'PREFIX' environment variables for choosing install locations.\n"
 	@printf "\n"
 	@printf "\e[1mTest\e[0m\n"

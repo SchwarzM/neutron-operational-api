@@ -24,6 +24,7 @@ const (
 
 type loadgen struct {
 	targetURL       string
+	ingressHost     string
 	sessionID       string
 	controlPlaneURL string
 
@@ -145,6 +146,9 @@ func (lg *loadgen) doRequest(ctx context.Context) {
 		return
 	}
 	req.Header.Set("X-Request-ID", id)
+	if lg.ingressHost != "" {
+		req.Host = lg.ingressHost
+	}
 
 	lg.inFlight.Add(1)
 	start := time.Now()
@@ -290,7 +294,12 @@ func main() {
 		log.Fatal("CONTROL_PLANE_URL env var required")
 	}
 
-	lg := &loadgen{targetURL: targetURL, sessionID: sessionID, controlPlaneURL: controlPlaneURL}
+	lg := &loadgen{
+		targetURL:       targetURL,
+		ingressHost:     os.Getenv("INGRESS_HOST"),
+		sessionID:       sessionID,
+		controlPlaneURL: controlPlaneURL,
+	}
 	lg.rps.Store(5)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)

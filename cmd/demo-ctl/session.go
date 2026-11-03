@@ -6,6 +6,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -13,10 +14,13 @@ import (
 )
 
 const (
-	ghcrImage = "ghcr.io/schwarzm/neutron-operational-api:edge"
+	ghcrImage   = "ghcr.io/schwarzm/neutron-operational-api:edge"
+	ingressBase = "n-o-d.c.eu-nl-1.cloud.sap"
+	nginxSvc    = "http://ingress-nginx-controller.ingress-nginx.svc.cluster.local"
 )
 
 func sessionNamespace(id string) string { return "demo-" + id }
+func sessionHost(id string) string      { return "demo-" + id + "." + ingressBase }
 
 // createSessionNamespace creates the demo-{id} namespace and all session-scoped
 // k8s objects: demo-server Deployment, demo-svc, loadgen Deployment, loadgen-svc.
@@ -33,6 +37,9 @@ func createSessionNamespace(ctx context.Context, cs kubernetes.Interface, id, co
 	}
 	if err := createLoadgenSvc(ctx, cs, ns); err != nil {
 		return fmt.Errorf("loadgen-svc: %w", err)
+	}
+	if err := createDemoIngress(ctx, cs, ns, id); err != nil {
+		return fmt.Errorf("demo ingress: %w", err)
 	}
 	if err := createLoadgenDeployment(ctx, cs, ns, id, controlPlaneURL); err != nil {
 		return fmt.Errorf("loadgen deployment: %w", err)
@@ -84,8 +91,9 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns}, //nolint:modernize
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
+			Replicas:        &replicas,
+			MinReadySeconds: 5, // wait for kube-proxy to propagate endpoints before removing old pods
+			Selector:        &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
@@ -157,6 +165,39 @@ func createLoadgenSvc(ctx context.Context, cs kubernetes.Interface, ns string) e
 	return err
 }
 
+func createDemoIngress(ctx context.Context, cs kubernetes.Interface, ns, id string) error {
+	className := "nginx"
+	pathType := networkingv1.PathTypePrefix
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns}, //nolint:modernize
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			Rules: []networkingv1.IngressRule{{
+				Host: sessionHost(id),
+				IngressRuleValue: networkingv1.IngressRuleValue{ //nolint:modernize
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "demo-svc",
+									Port: networkingv1.ServiceBackendPort{Number: 80},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+	_, err := cs.NetworkingV1().Ingresses(ns).Create(ctx, ing, metav1.CreateOptions{})
+	if k8serrors.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
+}
+
 func createLoadgenDeployment(ctx context.Context, cs kubernetes.Interface, ns, id, controlPlaneURL string) error {
 	replicas := int32(1)
 	dep := &appsv1.Deployment{
@@ -173,7 +214,8 @@ func createLoadgenDeployment(ctx context.Context, cs kubernetes.Interface, ns, i
 						ImagePullPolicy: corev1.PullAlways,
 						Command:         []string{"/loadgen"},
 						Env: []corev1.EnvVar{
-							{Name: "TARGET_URL", Value: "http://demo-svc." + ns + ".svc.cluster.local/"},
+							{Name: "TARGET_URL", Value: nginxSvc + "/"},
+							{Name: "INGRESS_HOST", Value: sessionHost(id)},
 							{Name: "SESSION_ID", Value: id},
 							{Name: "CONTROL_PLANE_URL", Value: controlPlaneURL},
 						},
