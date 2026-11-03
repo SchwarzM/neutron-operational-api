@@ -93,7 +93,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 				},
 			},
 			Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "demo"}},
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "demo"}},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &grace,
 					Containers: []corev1.Container{{
