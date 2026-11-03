@@ -10,31 +10,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 const (
 	ghcrImage = "ghcr.io/schwarzm/neutron-operational-api:edge"
 )
-
-// Cluster is a temporary stub so server.go/main.go compile until Tasks 5-6 replace them.
-type Cluster struct{}
-
-func NewCluster(_ Publisher) *Cluster                { return &Cluster{} }
-func (c *Cluster) Bootstrap(_ context.Context) error { return nil }
-func (c *Cluster) Destroy(_ context.Context) error   { return nil }
-func (c *Cluster) Clientset() kubernetes.Interface   { return nil }
-func (c *Cluster) RESTConfig() *rest.Config          { return nil }
-func (c *Cluster) IngressURL() string                { return "" }
-
-// LoadGen is a temporary stub so server.go/main.go compile until Tasks 5-6 replace them.
-type LoadGen struct{}
-
-func NewLoadGen(_ Publisher, _ *K8s, _ string) *LoadGen { return &LoadGen{} }
-func (lg *LoadGen) Start()                              {}
-func (lg *LoadGen) Stop()                               {}
-func (lg *LoadGen) SetRPS(_ int)                        {}
-func (lg *LoadGen) SetDurationMs(_ int64)               {}
 
 func sessionNamespace(id string) string { return "demo-" + id }
 

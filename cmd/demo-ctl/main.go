@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os/exec"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func main() {
@@ -20,40 +25,32 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	hub := NewHub()
-
-	cluster := NewCluster(hub)
-	if err := cluster.Bootstrap(ctx); err != nil {
-		return fmt.Errorf("bootstrap cluster: %w", err)
+	rcfg, err := buildConfig()
+	if err != nil {
+		return fmt.Errorf("build kubeconfig: %w", err)
+	}
+	cs, err := kubernetes.NewForConfig(rcfg)
+	if err != nil {
+		return fmt.Errorf("build clientset: %w", err)
 	}
 
-	k8s := NewK8s(hub, cluster.Clientset(), cluster.RESTConfig(), "", func() int { return 0 })
-	go k8s.WatchPods(ctx)
-	go k8s.WatchEndpoints(ctx)
-	go k8s.WatchDeployment(ctx)
+	controlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
+	if controlPlaneURL == "" {
+		controlPlaneURL = "http://localhost:9090"
+	}
 
-	lg := NewLoadGen(hub, k8s, cluster.IngressURL())
-
-	srv := NewAPIServer(hub, cluster, k8s, lg, stop)
+	sessions := NewSessionManager(cs, rcfg, controlPlaneURL)
+	srv := NewAPIServer(sessions)
 
 	httpSrv := &http.Server{
 		Addr:    ":9090",
 		Handler: srv.Handler(),
 	}
 
-	// Open browser
-	go openBrowser("http://localhost:9090")
-
 	go func() {
 		<-ctx.Done()
 		log.Println("shutting down...")
-		lg.Stop()
-		if err := cluster.Destroy(context.Background()); err != nil {
-			log.Printf("destroy cluster: %v", err)
-		}
-		if err := httpSrv.Shutdown(context.Background()); err != nil {
-			log.Printf("http shutdown: %v", err)
-		}
+		httpSrv.Shutdown(context.Background()) //nolint:errcheck
 	}()
 
 	log.Println("demo-ctl: listening on http://localhost:9090")
@@ -63,7 +60,15 @@ func run() error {
 	return nil
 }
 
-func openBrowser(url string) {
-	// macOS
-	exec.Command("open", url).Start() //nolint:errcheck // best-effort browser open, ignore failure
+// buildConfig returns an in-cluster config when running inside a pod,
+// otherwise falls back to KUBECONFIG env / ~/.kube/config.
+func buildConfig() (*rest.Config, error) {
+	if cfg, err := rest.InClusterConfig(); err == nil {
+		return cfg, nil
+	}
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if kubeconfig == "" {
+		kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	}
+	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }
