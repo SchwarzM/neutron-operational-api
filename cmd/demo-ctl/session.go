@@ -80,7 +80,7 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 	replicas := int32(2)
 	grace := int64(terminationGracePeriod)
 	maxU := intstr.FromInt32(0)
-	maxS := intstr.FromInt32(1)
+	maxS := intstr.FromString("100%") // replace all pods in one wave to minimise rollout duration
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns}, //nolint:modernize
 		Spec: appsv1.DeploymentSpec{
@@ -107,13 +107,18 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 							},
 						}},
 						Ports: []corev1.ContainerPort{{ContainerPort: 8080}},
+						Lifecycle: &corev1.Lifecycle{
+							PreStop: &corev1.LifecycleHandler{
+								Exec: &corev1.ExecAction{Command: []string{"sleep", "5"}},
+							},
+						},
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{ //nolint:modernize
 								HTTPGet: &corev1.HTTPGetAction{
 									Path: "/readyz", Port: intstr.FromInt32(8080),
 								},
 							},
-							PeriodSeconds: 2, FailureThreshold: 1, SuccessThreshold: 1,
+							PeriodSeconds: 2, FailureThreshold: 3, SuccessThreshold: 1,
 						},
 						LivenessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{ //nolint:modernize
