@@ -1,6 +1,5 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { get } from 'svelte/store'
   import { pods, endpoints, podRps } from './store.js'
   import PodNode from './PodNode.svelte'
 
@@ -81,7 +80,7 @@
       el,
       len: el.getTotalLength(),
     }))
-    if (segs.some(s => s.len === 0)) return
+    if (segs.length < segIds.length || segs.some(s => s.len === 0)) return
 
     const c = dotPool.pop() || document.createElementNS('http://www.w3.org/2000/svg', 'circle')
     c.setAttribute('r', '4.5')
@@ -164,9 +163,7 @@
   function handleRequest(ev) {
     const { podName, status, slow } = ev.detail
     const cls = slow ? 'warn' : status >= 200 && status < 300 ? 'add' : 'del'
-    // Forward dot only if pod is currently in the endpoint slice
-    if (get(endpoints).includes(podName)) spawnDot(podName, cls)
-    // Return dot always — pod still responds even after endpoint removal (graceful drain)
+    spawnDot(podName, cls)
     spawnReturnDot(podName, cls)
   }
 
