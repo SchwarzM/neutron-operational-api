@@ -19,12 +19,7 @@ golangciLint:
   createConfig: true
 
 goReleaser:
-  createConfig: true
-  binaryName: demo-ctl
-  format: .tar.gz
-  files:
-    - CHANGELOG.md
-    - README.md
+  createConfig: false
 
 controllerGen:
   enabled: false
@@ -48,7 +43,7 @@ githubWorkflow:
     platforms: "linux/amd64"
     tagStrategy: [edge, latest, semver, sha]
   release:
-    enabled: true
+    enabled: false
   securityChecks:
     enabled: false
   license:
