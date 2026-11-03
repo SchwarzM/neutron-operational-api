@@ -91,9 +91,8 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: ns}, //nolint:modernize
 		Spec: appsv1.DeploymentSpec{
-			Replicas:        &replicas,
-			MinReadySeconds: 5, // wait for kube-proxy to propagate endpoints before removing old pods
-			Selector:        &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}},
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
@@ -115,11 +114,6 @@ func createDemoDeployment(ctx context.Context, cs kubernetes.Interface, ns strin
 							},
 						}},
 						Ports: []corev1.ContainerPort{{ContainerPort: 8080}},
-						Lifecycle: &corev1.Lifecycle{
-							PreStop: &corev1.LifecycleHandler{
-								Exec: &corev1.ExecAction{Command: []string{"sleep", "5"}},
-							},
-						},
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{ //nolint:modernize
 								HTTPGet: &corev1.HTTPGetAction{
