@@ -35,8 +35,11 @@
   }
 
   // Per-pod
+  let podPending = $state({}) // podName → true while async call in flight
   async function toggleReady(pod) {
-    await api.setPodReady(pod.name, !pod.ready)
+    podPending = { ...podPending, [pod.name]: true }
+    try { await api.setPodReady(pod.name, !pod.ready) }
+    finally { podPending = { ...podPending, [pod.name]: false } }
   }
   async function setDelay(name, ms) {
     await api.setPodDelay(name, ms)
@@ -158,8 +161,8 @@
         {/if}
         <div class="pod-actions">
           <button class="btn small" onclick={() => toggleReady(pod)}
-            disabled={pod.terminating}>
-            {pod.ready ? 'set not-ready' : 'set ready'}
+            disabled={pod.terminating || podPending[pod.name]}>
+            {podPending[pod.name] ? '…' : pod.ready ? 'set not-ready' : 'set ready'}
           </button>
           <select class="sel" onchange={e => setDelay(pod.name, Number(e.target.value))}
             disabled={pod.terminating}>
