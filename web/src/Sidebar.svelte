@@ -62,13 +62,14 @@
     await api.setDuration(Number(durationMs))
   }
 
-  // Cluster destroy
+  // Session destroy + reset
   let destroying     = $state(false)
   let destroyConfirm = $state(false)
   async function destroy() {
     destroying = true
     destroyConfirm = false
     await api.destroyCluster()
+    window.location.href = '/'
   }
 
   const signalColors = {
@@ -197,16 +198,16 @@
     </div>
   </section>
 
-  <!-- Cluster -->
+  <!-- Session -->
   <section class="grp">
-    <h3>Cluster</h3>
+    <h3>Session</h3>
     {#if !destroyConfirm}
       <button class="btn danger" onclick={() => destroyConfirm = true}
         disabled={destroying}>
-        {destroying ? 'Destroying…' : 'Destroy cluster…'}
+        {destroying ? 'Resetting…' : 'New session…'}
       </button>
     {:else}
-      <p class="confirm-q">Delete the kind cluster?</p>
+      <p class="confirm-q">Delete this session's namespace and start fresh?</p>
       <div class="row">
         <button class="btn danger" onclick={destroy}>Confirm</button>
         <button class="btn" onclick={() => destroyConfirm = false}>Cancel</button>
